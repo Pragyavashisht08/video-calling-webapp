@@ -1,0 +1,95 @@
+/* ========== Base ========== */
+:root{
+  --bg:#f6f7fb; --card:#ffffff; --text:#0b1220; --muted:#64748b;
+  --line:#e5e7eb; --brand:#2563eb; --brand-2:#22d3ee; --brand-3:#8b5cf6;
+  --btn:#111827; --btn-text:#f8fafc; --shadow: 0 6px 24px rgba(2,6,23,.08);
+}
+:root.dark{
+  --bg:#0b1220; --card:#12172a; --text:#e5e7eb; --muted:#94a3b8; --line:#1e293b;
+  --btn:#0b1220; --btn-text:#e5e7eb; --shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box} body,html,#root{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+
+/* ========== Layout helpers ========== */
+.app{max-width:1120px;margin:0 auto;padding:16px}
+.row{display:flex;gap:10px;align-items:center}
+.grow{flex:1}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+
+/* ========== Cards & Headings ========== */
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius:16px;
+  box-shadow:var(--shadow); padding:14px;
+}
+.header{display:flex;align-items:center;justify-content:space-between;margin:10px 0}
+.header .left{display:flex;align-items:center;gap:10px}
+.logo{width:36px;height:36px;border-radius:10px;background:#22d3ee;
+  display:flex;align-items:center;justify-content:center;color:#0b1220}
+h1{font-size:22px;margin:0}
+h2{font-size:34px;margin:8px 0}
+h3{font-size:18px;margin:8px 0}
+.muted{color:var(--muted)}
+.muted.small{font-size:13px}
+
+/* ========== Buttons & Inputs ========== */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;
+  background:var(--btn);color:var(--btn-text);border:1px solid #111827;cursor:pointer;
+}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn.full{width:100%;justify-content:center}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.icon{display:inline-flex;align-items:center;justify-content:center;padding:6px;border-radius:8px;border:1px solid var(--line);background:transparent;cursor:pointer}
+.icon.danger{color:#ef4444;border-color:#ef4444}
+input[type="text"], input[type="password"], input[type="date"], input[type="time"]{
+  width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);
+}
+.label{display:block;font-weight:600;margin:12px 0 6px}
+
+/* ========== Brand bar ========== */
+.brand-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.brand{display:flex;align-items:center;gap:8px}
+.brand-icon{font-size:20px}
+.brand-title{font-weight:800}
+.brand-links .btn{padding:6px 10px}
+
+/* ========== Hero ========== */
+.main{display:grid;gap:16px}
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}
+.hero .hero-left{display:block}
+.hero .inset{padding:12px}
+.gradient-box{
+  position:relative;border-radius:14px;overflow:hidden;aspect-ratio:16/9;
+  background:linear-gradient(135deg,var(--brand-2),var(--brand-3));
+}
+.watermark{
+  position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  opacity:.85;color:#fff;filter:drop-shadow(0 8px 18px rgba(0,0,0,.35));
+}
+
+/* ========== Feature cards ========== */
+.feature .icon-badge{
+  width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;
+}
+.icon-badge.blue{background:rgba(34,211,238,.2)}
+.icon-badge.purple{background:rgba(139,92,246,.2)}
+.icon-badge.green{background:rgba(16,185,129,.2)}
+
+/* ========== Meetings ========== */
+.meeting-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.meeting-head{display:flex;align-items:center;justify-content:space-between}
+.meeting-meta{font-size:14px;color:var(--muted);display:grid;gap:4px}
+
+/* ========== Modal ========== */
+.modal{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);
+  display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;
+}
+.modal-card{width:100%;max-width:520px}
+
+/* ========== Responsive ========== */
+@media (max-width: 900px){
+  .hero{grid-template-columns:1fr}
+}

@@ -1,0 +1,41 @@
+/* index.css - plain CSS (no Tailwind) */
+
+/* Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Root theme */
+:root {
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --text-primary: #111;
+  --text-secondary: #555;
+  --border: #ccc;
+  --primary: #2563eb;
+  --shadow-lg: 0 0 10px rgba(0,0,0,0.1);
+}
+
+/* Body */
+body {
+  font-family: system-ui, Arial, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Buttons and links */
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
