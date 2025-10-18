@@ -1,4 +1,4 @@
-// server/src/index.js 
+// server/src/index.js
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -11,25 +11,78 @@ import crypto from "crypto";
 
 import { rooms, getOrCreateRoom, serializeRoom } from "./room.js";
 
+/* ------------------------- CORS: env-driven setup ------------------------- */
+// Accept a comma-separated list of origins in CORS_ORIGINS.
+// Supports:
+//   - exact: https://example.com
+//   - wildcard: *.netlify.app
+//   - regex:   /\\.onrender\\.com$/
+//
+// Examples:
+//   CORS_ORIGINS=https://your-site.netlify.app,*.example.com,/\\.onrender\\.com$/
+//
+// Fallback is localhost for dev.
+const rawOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
+  .split(",")
+  .map(s => s.trim())
+  .filter(Boolean);
+
+const toRegExp = (token) => {
+  // /.../ -> RegExp
+  if (token.startsWith("/") && token.endsWith("/")) {
+    try { return new RegExp(token.slice(1, -1)); } catch { /* ignore */ }
+  }
+  // *.domain.tld -> wildcard subdomain
+  if (token.startsWith("*.")) {
+    const base = token.slice(2).replace(/\./g, "\\.");
+    return new RegExp(`^https?:\/\/[^/]+\\.${base}$`);
+  }
+  return token; // exact string
+};
+
+const allowedOrigins = rawOrigins.map(toRegExp);
+
+const originMatches = (origin) => {
+  if (!origin) return true; // allow non-browser clients / same-origin
+  return allowedOrigins.some(rule =>
+    rule instanceof RegExp ? rule.test(origin) : rule === origin
+  );
+};
+
+// Express CORS config — use a function so we can evaluate wildcards/regex.
+const expressCors = cors({
+  origin(origin, cb) {
+    if (originMatches(origin)) return cb(null, true);
+    return cb(new Error("CORS: origin not allowed"), false);
+  },
+  credentials: true,
+});
+
+/* ------------------------------------------------------------------------ */
+
 const app = express();
 const server = http.createServer(app);
 
-// Socket.IO bound to the SAME HTTP server on port 4000
+// Socket.IO bound to the same HTTP server.
+// cors.origin here may be string | RegExp | Array<(string|RegExp)>
+// so we pass the parsed array directly.
 const io = new Server(server, {
-  // default path is "/socket.io"—client should use the same (no custom path needed)
-  cors: { origin: ["http://localhost:5173"], credentials: true },
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
+  // path: "/socket.io" // default; keep client default too
 });
 
 app.use(helmet());
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+app.use(expressCors);
 
 const limiter = rateLimit({ windowMs: 60_000, max: 180 });
 app.use(limiter);
 
-// In-memory meeting registry (REST layer)
-// meetingId -> { title, createdBy, pwdHash, requiresApproval, scheduledFor, ...runtime kept in rooms.js }
+// In-memory meeting registry
 const meetings = new Map();
 const newMeetingId = () => crypto.randomBytes(6).toString("base64url");
 
@@ -41,7 +94,7 @@ function requireName(req, res, next) {
   next();
 }
 
-// ========== REST API ==========
+/* =============================== REST API =============================== */
 
 // Create (host/creator only; must provide x-user-name)
 app.post("/api/meetings/create", requireName, async (req, res) => {
@@ -58,7 +111,7 @@ app.post("/api/meetings/create", requireName, async (req, res) => {
     scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
   });
 
-  // Pre-warm a runtime room shell (optional, nice DX)
+  // Pre-warm a runtime room shell (optional)
   getOrCreateRoom({
     id: meetingId,
     title: meetings.get(meetingId).title,
@@ -71,7 +124,7 @@ app.post("/api/meetings/create", requireName, async (req, res) => {
   res.json({ ok: true, meetingId });
 });
 
-// Public list (no auth to avoid 401 spam in your UI)
+// Public list
 app.get("/api/meetings/upcoming", (_req, res) => {
   const list = [...meetings.values()].map((m) => ({
     _id: m.meetingId,
@@ -86,7 +139,6 @@ app.get("/api/meetings/upcoming", (_req, res) => {
 });
 
 // Delete (only creator can delete)
-// client: fetch(`/api/meetings/${id}`, { method:'DELETE', headers:{'x-user-name': <name>} })
 app.delete("/api/meetings/:id", requireName, (req, res) => {
   const id = req.params.id;
   const m = meetings.get(id);
@@ -98,7 +150,7 @@ app.delete("/api/meetings/:id", requireName, (req, res) => {
   res.json({ ok: true });
 });
 
-// Quick password check (optional; used if you prompt for password on join)
+// Quick password check
 app.post("/api/meetings/check", (req, res) => {
   const { meetingId, password } = req.body || {};
   const m = meetings.get(meetingId);
@@ -111,21 +163,19 @@ app.post("/api/meetings/check", (req, res) => {
   });
 });
 
-// ========== Socket.IO ==========
+/* ============================= Socket.IO ============================== */
 io.on("connection", (socket) => {
   let joinedMeetingId = null;
 
-  // Simple SFU/MCU-agnostic signaling pass-through (if you use WebRTC signaling)
+  // WebRTC signaling passthrough
   socket.on("webrtc:signal", ({ to, data }) => {
     io.to(to).emit("webrtc:signal", { from: socket.id, data });
   });
 
   // Join request (host or guest)
   socket.on("request-join", async ({ meetingId, name, isHost, password }, cb = () => {}) => {
-    // If meeting exists in REST memory
     let meta = meetings.get(meetingId);
 
-    // Host can auto-create a live room shell if runtime lost (e.g., server restart)
     if (!meta && isHost) {
       meta = {
         meetingId,
@@ -143,7 +193,6 @@ io.on("connection", (socket) => {
       return socket.emit("join-reject", { reason: "Meeting not found" });
     }
 
-    // Password check if set
     if (meta.pwdHash) {
       const ok = await bcrypt.compare(password || "", meta.pwdHash);
       if (!ok) {
@@ -152,7 +201,6 @@ io.on("connection", (socket) => {
       }
     }
 
-    // Make sure a runtime room exists and is in sync
     const room = getOrCreateRoom({
       id: meetingId,
       title: meta.title,
@@ -167,7 +215,6 @@ io.on("connection", (socket) => {
       return socket.emit("join-reject", { reason: "Meeting is locked" });
     }
 
-    // Host claim if none
     if (!room.hostId && isHost) room.hostId = socket.id;
 
     const joiningUser = {
@@ -183,15 +230,11 @@ io.on("connection", (socket) => {
 
     if (socket.id !== room.hostId && (room.requiresApproval || room.locked)) {
       room.waiting.set(socket.id, { id: socket.id, name: joiningUser.name });
-      // notify host of lobby
-      if (room.hostId) {
-        io.to(room.hostId).emit("lobby-update", [...room.waiting.values()]);
-      }
+      if (room.hostId) io.to(room.hostId).emit("lobby-update", [...room.waiting.values()]);
       cb({ ok: true, waiting: true, room: serializeRoom(room) });
       return;
     }
 
-    // admit (host or unlocked)
     joinedMeetingId = meetingId;
     room.participants.set(socket.id, joiningUser);
     io.to(meetingId).emit("participants", [...room.participants.values()]);
@@ -257,7 +300,6 @@ io.on("connection", (socket) => {
     room.participants.delete(socket.id);
     io.to(joinedMeetingId).emit("participants", [...room.participants.values()]);
 
-    // if host leaves, unlock, clear lobby, notify & keep room ephemeral
     if (socket.id === room.hostId) {
       room.hostId = null;
       room.locked = false;
@@ -273,7 +315,7 @@ io.on("connection", (socket) => {
   socket.on("disconnect", cleanup);
 });
 
-// ========== Start ==========
+/* ============================== Start =============================== */
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
