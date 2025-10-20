@@ -8,13 +8,12 @@ import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { registerSocketHandlers } from "./socket.js";
 import { rooms, getOrCreateRoom, serializeRoom } from "./room.js";
 
 /* ------------------------- CORS: env-driven setup ------------------------- */
 const rawOrigins = (
   process.env.CORS_ORIGINS ||
-  process.env.CLIENT_ORIGIN || // fallback
+  process.env.CLIENT_ORIGIN || // fallback (Render env)
   "http://localhost:5173"
 )
   .split(",")
@@ -23,25 +22,24 @@ const rawOrigins = (
 
 const toRegExp = (token) => {
   if (token.startsWith("/") && token.endsWith("/")) {
-    try { return new RegExp(token.slice(1, -1)); } catch { /* ignore */ }
+    try { return new RegExp(token.slice(1, -1)); } catch { /* ignore bad regex */ }
   }
   if (token.startsWith("*.")) {
     const base = token.slice(2).replace(/\./g, "\\.");
     return new RegExp(`^https?:\/\/[^/]+\\.${base}$`);
   }
-  return token;
+  return token; // exact string
 };
 
 const allowedOrigins = rawOrigins.map(toRegExp);
 
 const originMatches = (origin) => {
-  if (!origin) return true; // allow non-browser/same-origin
+  if (!origin) return true; // allow same-origin & server-to-server
   return allowedOrigins.some(rule =>
     rule instanceof RegExp ? rule.test(origin) : rule === origin
   );
 };
 
-// Express CORS config — evaluated per request
 const expressCors = cors({
   origin(origin, cb) {
     if (originMatches(origin)) return cb(null, true);
@@ -54,7 +52,7 @@ const expressCors = cors({
 const app = express();
 const server = http.createServer(app);
 
-// ✅ Apply CORS **before** everything else and handle preflights
+// CORS must be first and handle preflights
 app.use(expressCors);
 app.options("*", expressCors);
 
@@ -65,7 +63,7 @@ app.use(cookieParser());
 const limiter = rateLimit({ windowMs: 60_000, max: 180 });
 app.use(limiter);
 
-// Socket.IO using the same CORS origin check
+// Socket.IO using the same dynamic origin check
 const io = new Server(server, {
   cors: {
     origin(origin, cb) {
@@ -77,13 +75,12 @@ const io = new Server(server, {
   },
   // path: "/socket.io"
 });
-registerSocketHandlers(io);
 
 // In-memory meeting registry
 const meetings = new Map();
 const newMeetingId = () => crypto.randomBytes(6).toString("base64url");
 
-// --- tiny helper: require a user name for modifying endpoints
+// Require a user name for modifying endpoints
 function requireName(req, res, next) {
   const name = (req.headers["x-user-name"] || "").trim();
   if (!name) return res.status(401).json({ ok: false, error: "Unauthorized: x-user-name required" });
@@ -160,14 +157,16 @@ app.post("/api/meetings/check", (req, res) => {
   });
 });
 
-/* ============================= Socket.IO (inline handlers kept) ============================== */
+/* ============================= Socket.IO ============================== */
 io.on("connection", (socket) => {
   let joinedMeetingId = null;
 
+  // WebRTC signaling passthrough
   socket.on("webrtc:signal", ({ to, data }) => {
     io.to(to).emit("webrtc:signal", { from: socket.id, data });
   });
 
+  // Join request (host or guest)
   socket.on("request-join", async ({ meetingId, name, isHost, password }, cb = () => {}) => {
     let meta = meetings.get(meetingId);
 
@@ -237,6 +236,7 @@ io.on("connection", (socket) => {
     socket.emit("approved");
   });
 
+  // Host admits/denies from lobby
   socket.on("host-approve", ({ meetingId, socketId }) => {
     const room = rooms.get(meetingId);
     if (!room || socket.id !== room.hostId) return;
@@ -265,6 +265,7 @@ io.on("connection", (socket) => {
     io.to(room.hostId).emit("lobby-update", [...room.waiting.values()]);
   });
 
+  // Host settings
   socket.on("host-settings", ({ meetingId, locked, allowShare, allowUnmute }) => {
     const room = rooms.get(meetingId);
     if (!room || socket.id !== room.hostId) return;
@@ -278,11 +279,13 @@ io.on("connection", (socket) => {
     });
   });
 
+  // Chat
   socket.on("chat:msg", ({ meetingId, name, text }) => {
     if (!text?.trim()) return;
     io.to(meetingId).emit("chat:msg", { name: name || "User", text: text.trim(), ts: Date.now() });
   });
 
+  // Cleanup on leave / disconnect
   const cleanup = () => {
     if (!joinedMeetingId) return;
     const room = rooms.get(joinedMeetingId);
