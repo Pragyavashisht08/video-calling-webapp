@@ -378,109 +378,6 @@ const Home = () => {
         </div>
       </nav>
 
-      {/* My Meetings Section */}
-      {showMeetings && (
-        <section ref={meetingsRef} className="meetings-section animate-slide-down">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">
-                <Calendar size={24} />
-                Upcoming Meetings
-              </h2>
-              <p className="section-subtitle">
-                {scheduledMeetings.length} scheduled meeting{scheduledMeetings.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-            <button
-              className="btn btn-secondary"
-              onClick={() => (isSignedIn ? setShowScheduleModal(true) : setShowSignIn(true))}
-              title={isSignedIn ? '' : 'Sign in to schedule a meeting'}
-            >
-              <Plus size={16} />
-              <span>Schedule New</span>
-            </button>
-          </div>
-
-          {scheduledMeetings.length === 0 ? (
-            <div className="empty-state">
-              <Calendar size={48} className="empty-icon" />
-              <p className="empty-title">No scheduled meetings yet</p>
-              <p className="empty-subtitle">Create your first meeting to get started</p>
-              <button
-                className="btn btn-primary"
-                onClick={() => (isSignedIn ? setShowScheduleModal(true) : setShowSignIn(true))}
-              >
-                <Plus size={16} />
-                <span>Schedule Meeting</span>
-              </button>
-            </div>
-          ) : (
-            <div className="meetings-grid">
-              {scheduledMeetings.map((m) => (
-                <div key={m._id} className="meeting-card">
-                  <div className="meeting-header">
-                    <div className="meeting-title-row">
-                      <h3 className="meeting-title">{m.title}</h3>
-                      <button
-                        className="btn-icon btn-danger"
-                        onClick={() => handleDeleteMeeting(m.meetingId)}
-                        title="Delete meeting"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <div className="meeting-time-badge">{getTimeUntilMeeting(m.date, m.time)}</div>
-                  </div>
-
-                  <div className="meeting-details">
-                    <div className="detail-item">
-                      <Calendar size={14} />
-                      <span>{m.date}</span>
-                    </div>
-                    <div className="detail-item">
-                      <Clock size={14} />
-                      <span>{m.time}</span>
-                    </div>
-                    <div className="detail-item">
-                      <Users size={14} />
-                      <span>Created by {m.createdBy}</span>
-                    </div>
-                  </div>
-
-                  <div className="meeting-features">
-                    {m.password && (
-                      <span className="feature-badge">
-                        <Lock size={12} />
-                        Password Protected
-                      </span>
-                    )}
-                    {m.requiresApproval && (
-                      <span className="feature-badge">
-                        <UserCheck size={12} />
-                        Approval Required
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="meeting-id">
-                    <span className="meeting-id-label">Meeting ID:</span>
-                    <code className="meeting-id-code">{m.meetingId}</code>
-                    <button className="btn-icon" onClick={() => copyMeetingLink(m.meetingId)} title="Copy meeting link">
-                      {copied === m.meetingId ? <Check size={14} /> : <Copy size={14} />}
-                    </button>
-                  </div>
-
-                  <button className="btn btn-primary btn-block" onClick={() => joinScheduledMeeting(m)}>
-                    <ExternalLink size={16} />
-                    <span>Join Meeting</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
       {/* Hero Section */}
       <main className="hero-section">
         <div className="hero-content">
@@ -604,6 +501,109 @@ const Home = () => {
           </div>
         </div>
       </main>
+
+      {/* My Meetings Section (moved below hero) */}
+      {showMeetings && (
+        <section ref={meetingsRef} className="meetings-section animate-slide-down">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">
+                <Calendar size={24} />
+                Upcoming Meetings
+              </h2>
+              <p className="section-subtitle">
+                {scheduledMeetings.length} scheduled meeting{scheduledMeetings.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <button
+              className="btn btn-secondary"
+              onClick={() => (isSignedIn ? setShowScheduleModal(true) : setShowSignIn(true))}
+              title={isSignedIn ? '' : 'Sign in to schedule a meeting'}
+            >
+              <Plus size={16} />
+              <span>Schedule New</span>
+            </button>
+          </div>
+
+          {scheduledMeetings.length === 0 ? (
+            <div className="empty-state">
+              <Calendar size={48} className="empty-icon" />
+              <p className="empty-title">No scheduled meetings yet</p>
+              <p className="empty-subtitle">Create your first meeting to get started</p>
+              <button
+                className="btn btn-primary"
+                onClick={() => (isSignedIn ? setShowScheduleModal(true) : setShowSignIn(true))}
+              >
+                <Plus size={16} />
+                <span>Schedule Meeting</span>
+              </button>
+            </div>
+          ) : (
+            <div className="meetings-grid">
+              {scheduledMeetings.map((m) => (
+                <div key={m._id} className="meeting-card">
+                  <div className="meeting-header">
+                    <div className="meeting-title-row">
+                      <h3 className="meeting-title">{m.title}</h3>
+                      <button
+                        className="btn-icon btn-danger"
+                        onClick={() => handleDeleteMeeting(m.meetingId)}
+                        title="Delete meeting"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <div className="meeting-time-badge">{getTimeUntilMeeting(m.date, m.time)}</div>
+                  </div>
+
+                  <div className="meeting-details">
+                    <div className="detail-item">
+                      <Calendar size={14} />
+                      <span>{m.date}</span>
+                    </div>
+                    <div className="detail-item">
+                      <Clock size={14} />
+                      <span>{m.time}</span>
+                    </div>
+                    <div className="detail-item">
+                      <Users size={14} />
+                      <span>Created by {m.createdBy}</span>
+                    </div>
+                  </div>
+
+                  <div className="meeting-features">
+                    {m.password && (
+                      <span className="feature-badge">
+                        <Lock size={12} />
+                        Password Protected
+                      </span>
+                    )}
+                    {m.requiresApproval && (
+                      <span className="feature-badge">
+                        <UserCheck size={12} />
+                        Approval Required
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="meeting-id">
+                    <span className="meeting-id-label">Meeting ID:</span>
+                    <code className="meeting-id-code">{m.meetingId}</code>
+                    <button className="btn-icon" onClick={() => copyMeetingLink(m.meetingId)} title="Copy meeting link">
+                      {copied === m.meetingId ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
+                  </div>
+
+                  <button className="btn btn-primary btn-block" onClick={() => joinScheduledMeeting(m)}>
+                    <ExternalLink size={16} />
+                    <span>Join Meeting</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Features Grid */}
       <section className="features-section">
@@ -893,7 +893,7 @@ const Home = () => {
               </div>
               <div className="card-row">
                 <span>Microphone</span>
-                <span className={permState.mic ? 'ok' : 'warn'}>{permState.mic ? 'OK' : 'Not granted'}</span>
+                <span className={permState.mic ? 'OK' : 'warn'}>{permState.mic ? 'OK' : 'Not granted'}</span>
               </div>
               {permState.error && <p className="error-text">{permState.error}</p>}
               <button
