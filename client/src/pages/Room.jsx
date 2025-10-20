@@ -7,7 +7,7 @@ import "./Room.css";
 const WS_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:4000";
 const socket = io(WS_URL, { withCredentials: true });
 
-// simple beep using oscillator (works everywhere; no asset needed)
+// quick beep (no asset)
 function beep(freq = 880, duration = 120) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -47,16 +47,15 @@ export default function Room() {
   const name = (localStorage.getItem("userName") || search.get("name") || "").trim();
   const isHost = search.get("admin") === "true";
 
-  // gate
   useEffect(() => {
     if (!name) navigate("/home");
   }, [name, navigate]);
 
   // state
-  const [approved, setApproved] = useState(isHost); // host auto-approved
-  const [lobby, setLobby] = useState([]); // host view
+  const [approved, setApproved] = useState(isHost);
+  const [lobby, setLobby] = useState([]);
   const [settings, setSettings] = useState({ locked: false, allowShare: true, allowUnmute: true });
-  const [participants, setParticipants] = useState([]); // [{id,name,role,...}]
+  const [participants, setParticipants] = useState([]);
   const [chat, setChat] = useState([]);
   const [msg, setMsg] = useState("");
   const [muted, setMuted] = useState(false);
@@ -64,21 +63,19 @@ export default function Room() {
   const [recording, setRecording] = useState(false);
   const [activeSpeaker, setActiveSpeaker] = useState("");
   const [myId, setMyId] = useState("");
+  const [isSharing, setIsSharing] = useState(false);
 
-  // media + rtc refs
+  // media + rtc
   const localVideo = useRef(null);
   const localStream = useRef(null);
+  const displayStreamRef = useRef(null);
   const analyser = useRef(null);
 
-  // peers: id -> RTCPeerConnection
-  const peers = useRef(new Map());
-  // remote media: id -> MediaStream
-  const remoteStreams = useRef(new Map());
+  const peers = useRef(new Map());         // id -> RTCPeerConnection
+  const remoteStreams = useRef(new Map()); // id -> MediaStream
+  const remoteVideoEls = useRef(new Map());// id -> HTMLVideoElement
 
-  // map of remote <video> elements (rendered)
-  const remoteVideoEls = useRef(new Map());
-
-  // ========= init media + socket =========
+  // ========= init =========
   useEffect(() => {
     let mounted = true;
 
@@ -86,23 +83,22 @@ export default function Room() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if (!mounted) return;
+
         localStream.current = stream;
         localVideo.current.srcObject = stream;
 
-        // active speaker detection
+        // active speaker for local
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const src = ctx.createMediaStreamSource(stream);
         analyser.current = ctx.createAnalyser();
         analyser.current.fftSize = 512;
         src.connect(analyser.current);
 
-        // identify socket id
         socket.on("connect", () => setMyId(socket.id));
 
-        // lobby + approvals
         socket.on("lobby-update", (list) => {
           setLobby(list);
-          if (isHost) {
+          if (isHost && list?.length) {
             beep(740, 160);
             toast(`${list[list.length - 1]?.name || "Someone"} requested to join`, "info");
           }
@@ -119,17 +115,14 @@ export default function Room() {
           navigate("/home");
         });
 
-        // room state and settings
         socket.on("host-settings", setSettings);
 
-        // participants list -> manage peers and notifications
+        // participants update: create/close peers + toasts
         let prevIds = new Set();
         socket.on("participants", async (list) => {
           setParticipants(list);
-
           const ids = new Set(list.map((p) => p.id));
 
-          // notifications for join/leave
           const joined = [...ids].filter((id) => !prevIds.has(id));
           const left = [...prevIds].filter((id) => !ids.has(id));
 
@@ -149,41 +142,30 @@ export default function Room() {
           }
           prevIds = ids;
 
-          // build/close peers
-          // create peers for any new ids
           for (const p of list) {
             if (p.id === myId) continue;
-            if (!peers.current.has(p.id)) {
-              await createPeer(p.id);
-            }
+            if (!peers.current.has(p.id)) await createPeer(p.id);
           }
-          // close for ids no longer present
-          for (const [pid, pc] of peers.current) {
-            if (!ids.has(pid)) {
-              closePeer(pid);
-            }
+          for (const [pid] of peers.current) {
+            if (!ids.has(pid)) closePeer(pid);
           }
 
-          // deterministic offerer to avoid glare: lower socket id offers
+          // glare avoidance: lowest id offers
           for (const p of list) {
             if (p.id === myId) continue;
             if (myId && p.id && myId < p.id) {
-              // if we are the designated offerer and have a fresh pc without remote desc, make offer
               const pc = peers.current.get(p.id);
               if (pc && !pc.currentRemoteDescription) {
                 try {
                   const offer = await pc.createOffer();
                   await pc.setLocalDescription(offer);
                   socket.emit("webrtc:signal", { to: p.id, data: { sdp: offer } });
-                } catch (e) {
-                  // ignore
-                }
+                } catch {}
               }
             }
           }
         });
 
-        // signaling
         socket.on("webrtc:signal", async ({ from, data }) => {
           let pc = peers.current.get(from);
           if (!pc) {
@@ -200,29 +182,22 @@ export default function Room() {
                 socket.emit("webrtc:signal", { to: from, data: { sdp: answer } });
               }
             } else if (data.candidate) {
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-              } catch {}
+              try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
             }
-          } catch (e) {
-            // ignore errors to keep flow robust
-          }
+          } catch {}
         });
 
-        // chat
         socket.on("chat:msg", (m) => setChat((c) => [...c, m]));
 
-        // room ended by host
         socket.on("room:ended", () => {
           beep(360, 300);
           toast("Meeting ended by host", "info");
           setTimeout(() => navigate("/"), 400);
         });
 
-        // request to join
+        // join
         socket.emit("request-join", { meetingId: roomId, name, isHost });
-
-      } catch (err) {
+      } catch {
         toast("Camera/Microphone permission required", "error");
         navigate("/home");
       }
@@ -232,7 +207,6 @@ export default function Room() {
 
     return () => {
       mounted = false;
-      // cleanup
       socket.emit("leave");
       socket.off("connect");
       socket.off("lobby-update");
@@ -248,11 +222,13 @@ export default function Room() {
       peers.current.clear();
       remoteStreams.current.clear();
 
+      // stop display stream if sharing
+      displayStreamRef.current?.getTracks?.().forEach((t) => t.stop());
       localStream.current?.getTracks().forEach((t) => t.stop());
     };
   }, [roomId, name, isHost, navigate, myId]);
 
-  // active speaker pulse for local user
+  // active speaker for local
   useEffect(() => {
     let raf;
     const buf = new Uint8Array(analyser.current?.frequencyBinCount || 0);
@@ -268,23 +244,16 @@ export default function Room() {
     return () => cancelAnimationFrame(raf);
   }, [name]);
 
-  // ======== helpers: rtc peer management ========
+  // ======== rtc helpers ========
   async function createPeer(remoteId) {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" }, // free STUN for connectivity
-      ],
-    });
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
 
-    // add our tracks
     if (localStream.current) {
       localStream.current.getTracks().forEach((t) => pc.addTrack(t, localStream.current));
     }
 
     pc.onicecandidate = (e) => {
-      if (e.candidate) {
-        socket.emit("webrtc:signal", { to: remoteId, data: { candidate: e.candidate } });
-      }
+      if (e.candidate) socket.emit("webrtc:signal", { to: remoteId, data: { candidate: e.candidate } });
     };
 
     pc.ontrack = (e) => {
@@ -295,15 +264,12 @@ export default function Room() {
         stream.__name = participants.find((p) => p.id === remoteId)?.name || "Guest";
       }
       e.streams[0]?.getTracks().forEach((t) => stream.addTrack(t));
-      // bind to element if present
       const el = remoteVideoEls.current.get(remoteId);
       if (el && el.srcObject !== stream) el.srcObject = stream;
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed" || pc.connectionState === "closed" || pc.connectionState === "disconnected") {
-        closePeer(remoteId);
-      }
+      if (["failed", "closed", "disconnected"].includes(pc.connectionState)) closePeer(remoteId);
     };
 
     peers.current.set(remoteId, pc);
@@ -341,43 +307,50 @@ export default function Room() {
     setVideoOff(!t.enabled);
   };
 
-  const shareScreen = async () => {
+  const startShare = async () => {
     if (!settings.allowShare && !isHost) {
       toast("Host disabled screen sharing", "error");
       return;
     }
     try {
       const display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      displayStreamRef.current = display;
       const vTrack = display.getVideoTracks()[0];
 
-      // replace on all RTCPeerConnections
       for (const [, pc] of peers.current) {
         const sender = pc.getSenders().find((s) => s.track && s.track.kind === "video");
         if (sender) await sender.replaceTrack(vTrack);
       }
 
-      // local preview switches to display stream
       const prev = localStream.current;
       localVideo.current.srcObject = display;
+      setIsSharing(true);
 
-      vTrack.onended = async () => {
-        // restore camera track
-        const cam = prev?.getVideoTracks?.()[0];
-        if (cam) {
-          for (const [, pc] of peers.current) {
-            const sender = pc.getSenders().find((s) => s.track && s.track.kind === "video");
-            if (sender) await sender.replaceTrack(cam);
-          }
-          localVideo.current.srcObject = prev;
-        }
-      };
-    } catch (e) {
-      // cancelled
+      vTrack.onended = stopShare; // if user clicks “Stop sharing” in browser UI
+    } catch { /* user cancelled */ }
+  };
+
+  const stopShare = async () => {
+    const prev = localStream.current;
+    const cam = prev?.getVideoTracks?.()[0];
+    if (cam) {
+      for (const [, pc] of peers.current) {
+        const sender = pc.getSenders().find((s) => s.track && s.track.kind === "video");
+        if (sender) await sender.replaceTrack(cam);
+      }
+      localVideo.current.srcObject = prev;
     }
+    displayStreamRef.current?.getTracks?.().forEach((t) => t.stop());
+    displayStreamRef.current = null;
+    setIsSharing(false);
+  };
+
+  const toggleShare = () => {
+    if (isSharing) stopShare();
+    else startShare();
   };
 
   const startStopRecord = () => {
-    // client-side local recording of own stream
     if (!recording) {
       const rec = new MediaRecorder(localStream.current, { mimeType: "video/webm;codecs=vp9" });
       const chunks = [];
@@ -386,9 +359,7 @@ export default function Room() {
         const blob = new Blob(chunks, { type: "video/webm" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
-        a.download = `meeting-${roomId}.webm`;
-        a.click();
+        a.href = url; a.download = `meeting-${roomId}.webm`; a.click();
         URL.revokeObjectURL(url);
       };
       rec.start(1000);
@@ -411,15 +382,13 @@ export default function Room() {
   // host actions
   const approve = (socketId) => socket.emit("host-approve", { meetingId: roomId, socketId });
   const deny = (socketId) => socket.emit("host-deny", { meetingId: roomId, socketId });
-  const toggleLock = () => socket.emit("host-settings", { meetingId: roomId, locked: !settings.locked });
-  const toggleShare = () => socket.emit("host-settings", { meetingId: roomId, allowShare: !settings.allowShare });
-  const toggleUnmute = () => socket.emit("host-settings", { meetingId: roomId, allowUnmute: !settings.allowUnmute });
+  const hostToggleLock = () => socket.emit("host-settings", { meetingId: roomId, locked: !settings.locked });
+  const hostToggleShare = () => socket.emit("host-settings", { meetingId: roomId, allowShare: !settings.allowShare });
+  const hostToggleUnmute = () => socket.emit("host-settings", { meetingId: roomId, allowUnmute: !settings.allowUnmute });
 
   const endMeeting = () => {
     if (!isHost) return;
-    if (confirm("End meeting for everyone?")) {
-      socket.emit("host:end-meeting", { roomId });
-    }
+    if (confirm("End meeting for everyone?")) socket.emit("host:end-meeting", { roomId });
   };
 
   const leave = () => {
@@ -431,7 +400,7 @@ export default function Room() {
   return (
     <div className="room-container">
       <header className="room-header">
-        <div className="room-title">Meeting</div>
+        <div className="room-title">VideoMeet • Room</div>
         <div className="room-right">
           <span className="room-pill">{isHost ? "Host" : "Guest"}: {name}</span>
           <span className={`room-pill ${settings.locked ? "danger" : ""}`}>{settings.locked ? "Locked" : "Unlocked"}</span>
@@ -497,7 +466,7 @@ export default function Room() {
       <div className="controls-bar">
         <button className="control-button" onClick={toggleMute}>{muted ? "🔇 Unmute" : "🎙️ Mute"}</button>
         <button className="control-button" onClick={toggleVideo}>{videoOff ? "📷 Start Video" : "📹 Stop Video"}</button>
-        <button className="control-button" onClick={shareScreen}>🖥️ Share Screen</button>
+        <button className="control-button" onClick={toggleShare}>{isSharing ? "🛑 Stop Share" : "🖥️ Share Screen"}</button>
         <button className="control-button" onClick={startStopRecord}>{recording ? "⏹ Stop" : "📼 Record"}</button>
         <button className="control-button" onClick={() => toast("Hand raised ✋", "info")}>✋ Raise Hand</button>
         {!isHost && <button className="control-button danger" onClick={leave}>🚪 Leave</button>}
@@ -505,9 +474,19 @@ export default function Room() {
 
       {/* Chat */}
       <div className="chat-dock">
+        <div className="chat-header">Chat</div>
         <div className="chat-messages">
           {chat.map((m, i) => (
-            <div key={i} className="chat-line"><strong>{m.name}:</strong> {m.text}</div>
+            <div
+              key={i}
+              className={`chat-line ${m.name === name ? "me" : "them"}`}
+              title={new Date(m.ts || Date.now()).toLocaleTimeString()}
+            >
+              <div className="bubble">
+                <span className="who">{m.name === name ? "You" : m.name}</span>
+                <span className="text">{m.text}</span>
+              </div>
+            </div>
           ))}
         </div>
         <div className="chat-input-row">
@@ -524,9 +503,9 @@ export default function Room() {
       {/* Host security footer */}
       {isHost && (
         <div className="host-bar">
-          <button className="btn" onClick={toggleLock}>{settings.locked ? "🔓 Unlock" : "🔒 Lock"}</button>
-          <button className="btn" onClick={toggleShare}>{settings.allowShare ? "✅ Allow Share" : "🚫 Share Disabled"}</button>
-          <button className="btn" onClick={toggleUnmute}>{settings.allowUnmute ? "✅ Allow Unmute" : "🚫 Unmute Disabled"}</button>
+          <button className="btn" onClick={hostToggleLock}>{settings.locked ? "🔓 Unlock" : "🔒 Lock"}</button>
+          <button className="btn" onClick={hostToggleShare}>{settings.allowShare ? "✅ Allow Share" : "🚫 Share Disabled"}</button>
+          <button className="btn" onClick={hostToggleUnmute}>{settings.allowUnmute ? "✅ Allow Unmute" : "🚫 Unmute Disabled"}</button>
         </div>
       )}
     </div>
