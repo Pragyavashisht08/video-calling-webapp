@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Video, Calendar, Plus, LogIn, Clock, Users, Moon, Sun,
   Trash2, ExternalLink, Shield, Lock, UserCheck, Copy, Check,
@@ -38,6 +38,9 @@ const Home = () => {
   const [showStartModal, setShowStartModal] = useState(false);
   const [permState, setPermState] = useState({ cam: false, mic: false, testing: false, error: '' });
 
+  // ✅ Put the ref INSIDE the component
+  const meetingsRef = useRef(null);
+
   // ---------------------------
   // Init
   // ---------------------------
@@ -59,6 +62,13 @@ const Home = () => {
     localStorage.setItem('darkMode', darkMode);
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
+
+  // ✅ Smooth-scroll when opening the section
+  useEffect(() => {
+    if (showMeetings && meetingsRef.current) {
+      meetingsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [showMeetings]);
 
   const loadStats = () => {
     const total = parseInt(localStorage.getItem('totalMeetingsCreated') || '0', 10);
@@ -333,7 +343,7 @@ const Home = () => {
           </div>
 
           <div className="navbar-links">
-            <button className="nav-link" onClick={() => setShowMeetings(!showMeetings)}>
+            <button className="nav-link" onClick={() => setShowMeetings(s => !s)}>
               <Calendar size={18} />
               <span>My Meetings</span>
               {scheduledMeetings.length > 0 && (
@@ -356,7 +366,7 @@ const Home = () => {
 
       {/* My Meetings Section */}
       {showMeetings && (
-        <section className="meetings-section animate-slide-down">
+        <section ref={meetingsRef} className="meetings-section animate-slide-down">
           <div className="section-header">
             <div>
               <h2 className="section-title">
@@ -799,6 +809,7 @@ const Home = () => {
         </Modal>
       )}
 
+      {/* Sign In Modal */}
       {showSignIn && (
         <Modal title="Sign In" onClose={() => setShowSignIn(false)}>
           <div className="modal-content">
@@ -890,8 +901,6 @@ const Home = () => {
               <button
                 className="btn btn-primary"
                 onClick={enterAsHost}
-                // If you want to force permission attempt first, uncomment:
-                // disabled={!permState.cam || !permState.mic}
               >
                 Enter as Host
               </button>
