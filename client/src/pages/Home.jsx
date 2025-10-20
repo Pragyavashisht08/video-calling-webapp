@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Video, Calendar, Plus, LogIn, Clock, Users, Moon, Sun,
   Trash2, ExternalLink, Shield, Lock, UserCheck, Copy, Check,
@@ -10,6 +10,9 @@ const API_BASE = import.meta.env.VITE_SERVER_URL || 'http://localhost:4000';
 const api = (p) => `${API_BASE}${p}`;
 
 const Home = () => {
+  // ✨ moved inside the component
+  const meetingsRef = React.useRef(null);
+
   const [meetingId, setMeetingId] = useState('');
   const [userName, setUserName] = useState('');
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -33,13 +36,10 @@ const Home = () => {
   const [scheduledMeetings, setScheduledMeetings] = useState([]);
   const [stats, setStats] = useState({ totalMeetings: 0, upcomingMeetings: 0 });
 
-  // --- Added for post-create flow ---
+  // post-create flow (unchanged)
   const [createdMeeting, setCreatedMeeting] = useState(null); // { id, url }
   const [showStartModal, setShowStartModal] = useState(false);
   const [permState, setPermState] = useState({ cam: false, mic: false, testing: false, error: '' });
-
-  // ✅ Put the ref INSIDE the component
-  const meetingsRef = useRef(null);
 
   // ---------------------------
   // Init
@@ -58,17 +58,27 @@ const Home = () => {
     loadStats();
   }, []);
 
+  // when "My Meetings" panel opens, scroll it into view
+  useEffect(() => {
+    if (showMeetings) {
+      // wait for DOM paint
+      setTimeout(() => {
+        meetingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 0);
+    }
+  }, [showMeetings]);
+
+  // also scroll after meetings load while the panel is open
+  useEffect(() => {
+    if (showMeetings) {
+      meetingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [scheduledMeetings, showMeetings]);
+
   useEffect(() => {
     localStorage.setItem('darkMode', darkMode);
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
-
-  // ✅ Smooth-scroll when opening the section
-  useEffect(() => {
-    if (showMeetings && meetingsRef.current) {
-      meetingsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [showMeetings]);
 
   const loadStats = () => {
     const total = parseInt(localStorage.getItem('totalMeetingsCreated') || '0', 10);
@@ -85,7 +95,9 @@ const Home = () => {
           title: m.title || 'Untitled Meeting',
           meetingId: m.meetingId,
           date: m.scheduledFor ? new Date(m.scheduledFor).toLocaleDateString() : '—',
-          time: m.scheduledFor ? new Date(m.scheduledFor).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
+          time: m.scheduledFor
+            ? new Date(m.scheduledFor).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : '—',
           password: m.password || '',
           requiresApproval: m.requiresApproval !== false,
           createdBy: m.createdBy || 'Unknown',
@@ -141,7 +153,6 @@ const Home = () => {
     return `In ${days} day${days > 1 ? 's' : ''}`;
   };
 
-  // --- Helpers for share link & permissions ---
   const copyText = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -210,7 +221,7 @@ const Home = () => {
 
       showNotification('Meeting created successfully!', 'success');
 
-      // NEW: Show share/permission modal instead of immediate redirect
+      // Show share/permission modal instead of immediate redirect
       const url = `${window.location.origin}/room/${res.meetingId}?name=${encodeURIComponent(n)}&admin=true`;
       setCreatedMeeting({ id: res.meetingId, url });
       setShowStartModal(true);
@@ -343,7 +354,10 @@ const Home = () => {
           </div>
 
           <div className="navbar-links">
-            <button className="nav-link" onClick={() => setShowMeetings(s => !s)}>
+            <button
+              className="nav-link"
+              onClick={() => setShowMeetings((v) => !v)}
+            >
               <Calendar size={18} />
               <span>My Meetings</span>
               {scheduledMeetings.length > 0 && (
@@ -809,7 +823,6 @@ const Home = () => {
         </Modal>
       )}
 
-      {/* Sign In Modal */}
       {showSignIn && (
         <Modal title="Sign In" onClose={() => setShowSignIn(false)}>
           <div className="modal-content">

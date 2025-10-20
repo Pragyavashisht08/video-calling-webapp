@@ -96,7 +96,7 @@ body {
 
 .app {
   min-height: 100vh;
-  background: var(--bg-primary);               /* keep solid; see note to move gradient to hero if desired */
+  background: var(--bg-primary);
   transition: background-color var(--transition-base);
 }
 
@@ -487,6 +487,8 @@ body {
 .animate-slide-down { animation: slideDown .3s ease-out; }
 @keyframes slideDown { from{opacity:0;transform:translateY(-20px)} to{opacity:1;transform:translateY(0)} }
 
+@keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -538,3 +540,7 @@ body {
 @media print {
   .navbar, .btn, .modal-overlay { display: none; }
 }
+
+/* Smooth scroll + offset for sticky navbar */
+html { scroll-behavior: smooth; }
+.meetings-section { scroll-margin-top: 80px; }
