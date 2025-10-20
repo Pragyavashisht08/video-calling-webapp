@@ -215,6 +215,11 @@ button {
   outline: none;
 }
 
+/* Chat readability */
+.chat-line { color: #e5e7eb; }
+.chat-line .chat-name { color: #93c5fd; font-weight: 700; }
+.chat-line .chat-text { color: #f9fafb; }
+
 /* Lobby + waiting overlay + chat + active speaker */
 
 .lobby-banner{background:#1f2937;color:#e5e7eb;padding:8px 16px;border-bottom:1px solid #374151}

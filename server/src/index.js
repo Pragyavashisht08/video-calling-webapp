@@ -314,3 +314,17 @@ const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
 });
+socket.on("host:end-meeting", ({ roomId }) => {
+  const room = rooms.get(roomId);
+  if (!room || socket.id !== room.hostId) return;
+
+  // notify everyone and clean up
+  io.to(roomId).emit("room:ended");
+
+  // make everyone leave the socket.io room
+  for (const sid of room.participants.keys()) {
+    io.sockets.sockets.get(sid)?.leave(roomId);
+  }
+  rooms.delete(roomId);
+  meetings.delete(roomId); // optional: remove from REST list if you want
+});
