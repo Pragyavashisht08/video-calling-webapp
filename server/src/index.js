@@ -8,7 +8,7 @@ import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-
+import { registerSocketHandlers } from "./socket.js";
 import { rooms, getOrCreateRoom, serializeRoom } from "./room.js";
 
 /* ------------------------- CORS: env-driven setup ------------------------- */
@@ -22,7 +22,12 @@ import { rooms, getOrCreateRoom, serializeRoom } from "./room.js";
 //   CORS_ORIGINS=https://your-site.netlify.app,*.example.com,/\\.onrender\\.com$/
 //
 // Fallback is localhost for dev.
-const rawOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
+// ✅ CHANGE: also respect CLIENT_ORIGIN so Render’s env works out-of-the-box.
+const rawOrigins = (
+  process.env.CORS_ORIGINS ||
+  process.env.CLIENT_ORIGIN ||           // <— added fallback
+  "http://localhost:5173"
+)
   .split(",")
   .map(s => s.trim())
   .filter(Boolean);
@@ -73,7 +78,7 @@ const io = new Server(server, {
   },
   // path: "/socket.io" // default; keep client default too
 });
-
+registerSocketHandlers(io);
 app.use(helmet());
 app.use(express.json());
 app.use(cookieParser());

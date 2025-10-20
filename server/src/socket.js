@@ -1,28 +1,12 @@
 // server/src/socket.js
-import { Server } from "socket.io";
+// ✅ CHANGED: remove Server creation here; accept io from index.js
 import { rooms, getOrCreateRoom, serializeRoom } from "./rooms.js";
 
 /**
- * Initialize Socket.IO on the given HTTP server.
- * @param {import('http').Server} server
- * @param {string[]|function} origins - allowed origins array or custom origin fn
- * @returns {Server} io instance
+ * Register Socket.IO handlers on the provided io instance.
+ * @param {import('socket.io').Server} io
  */
-export function socketInit(server, origins = ["http://localhost:5173"]) {
-  const io = new Server(server, {
-    cors: {
-      origin(origin, cb) {
-        // allow server-to-server and same-origin requests with no Origin header
-        if (!origin) return cb(null, true);
-        if (typeof origins === "function") return origins(origin, cb);
-        if (Array.isArray(origins) && origins.includes(origin)) return cb(null, true);
-        return cb(new Error("CORS blocked: " + origin));
-      },
-      credentials: true,
-      methods: ["GET", "POST"],
-    },
-  });
-
+export function registerSocketHandlers(io) {
   io.on("connection", (socket) => {
     // ========= helpers =========
     function emitRoomState(roomId) {
@@ -272,6 +256,4 @@ export function socketInit(server, origins = ["http://localhost:5173"]) {
       }
     });
   });
-
-  return io;
 }
