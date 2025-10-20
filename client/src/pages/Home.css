@@ -546,21 +546,36 @@ body {
    ============================================ */
 html { scroll-behavior: smooth; }
 .meetings-section { scroll-margin-top: 80px; }
-/* ============================================
-   Always-scroll layout (final working version)
-   ============================================ */
+/* =======================================================
+   Universal Scroll Fix — Works even if parent blocks it
+   ======================================================= */
+
+/* 1️⃣ Allow the browser to scroll */
 html, body {
-  height: 100%;
-  overflow-y: auto;
+  height: auto !important;
+  min-height: 100vh !important;
+  overflow-y: auto !important;
+  scroll-behavior: smooth;
 }
 
-.app {
-  min-height: 120vh; /* ensures scroll always available */
+/* 2️⃣ Ensure React root container isn't clipping content */
+#root, .app {
+  min-height: 120vh; /* ensures gentle scroll even before sign-in */
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  background: var(--bg-primary);
+  overflow: visible !important;
 }
-.footer {
-  margin-top: var(--space-12); /* instead of var(--space-16) */
+
+/* 3️⃣ Meetings section scrolls smoothly into view */
+.meetings-section {
+  scroll-margin-top: 80px;
+}
+
+/* 4️⃣ Optional (just ensures the hero fills one screen nicely) */
+.hero-section {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
