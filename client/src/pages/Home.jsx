@@ -33,6 +33,11 @@ const Home = () => {
   const [scheduledMeetings, setScheduledMeetings] = useState([]);
   const [stats, setStats] = useState({ totalMeetings: 0, upcomingMeetings: 0 });
 
+  // --- Added for post-create flow ---
+  const [createdMeeting, setCreatedMeeting] = useState(null); // { id, url }
+  const [showStartModal, setShowStartModal] = useState(false);
+  const [permState, setPermState] = useState({ cam: false, mic: false, testing: false, error: '' });
+
   // ---------------------------
   // Init
   // ---------------------------
@@ -126,6 +131,34 @@ const Home = () => {
     return `In ${days} day${days > 1 ? 's' : ''}`;
   };
 
+  // --- Helpers for share link & permissions ---
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showNotification('Link copied!', 'success');
+    } catch {
+      showNotification('Copy failed. Please copy manually.', 'error');
+    }
+  };
+
+  const testPermissions = async () => {
+    setPermState((p) => ({ ...p, testing: true, error: '' }));
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      stream.getTracks().forEach((t) => t.stop());
+      setPermState({ cam: true, mic: true, testing: false, error: '' });
+      showNotification('Camera & Microphone are accessible', 'success');
+    } catch (err) {
+      setPermState({ cam: false, mic: false, testing: false, error: err?.name || 'Permission denied' });
+      showNotification('Please allow camera & mic to continue', 'error');
+    }
+  };
+
+  const enterAsHost = () => {
+    if (!createdMeeting) return;
+    window.location.href = createdMeeting.url;
+  };
+
   // ---------------------------
   // Actions
   // ---------------------------
@@ -166,10 +199,11 @@ const Home = () => {
       localStorage.setItem('totalMeetingsCreated', total);
 
       showNotification('Meeting created successfully!', 'success');
-      setTimeout(() => {
-        // Host goes in with admin=true
-        window.location.href = `/room/${res.meetingId}?name=${encodeURIComponent(n)}&admin=true`;
-      }, 300);
+
+      // NEW: Show share/permission modal instead of immediate redirect
+      const url = `${window.location.origin}/room/${res.meetingId}?name=${encodeURIComponent(n)}&admin=true`;
+      setCreatedMeeting({ id: res.meetingId, url });
+      setShowStartModal(true);
     } catch (e) {
       console.error(e);
       showNotification(e.message || 'Could not create meeting. Please try again.', 'error');
@@ -765,7 +799,6 @@ const Home = () => {
         </Modal>
       )}
 
-      {/* Sign In Modal */}
       {showSignIn && (
         <Modal title="Sign In" onClose={() => setShowSignIn(false)}>
           <div className="modal-content">
@@ -800,6 +833,67 @@ const Home = () => {
                 }}
               >
                 Continue
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Start Meeting Modal (after creating a new meeting) */}
+      {showStartModal && createdMeeting && (
+        <Modal title="Your meeting is ready" onClose={() => { setShowStartModal(false); setCreatedMeeting(null); }}>
+          <div className="modal-content">
+            {/* Meeting link */}
+            <div className="input-group">
+              <label className="input-label">Share this link</label>
+              <div className="input-with-button">
+                <input
+                  className="input"
+                  type="text"
+                  readOnly
+                  value={createdMeeting.url}
+                  onFocus={(e) => e.target.select()}
+                />
+                <button className="btn btn-secondary" onClick={() => copyText(createdMeeting.url)}>
+                  Copy
+                </button>
+              </div>
+              <p className="input-hint">Send this link to participants to join.</p>
+            </div>
+
+            {/* Permission check */}
+            <div className="card soft">
+              <div className="card-row">
+                <span>Camera</span>
+                <span className={permState.cam ? 'ok' : 'warn'}>{permState.cam ? 'OK' : 'Not granted'}</span>
+              </div>
+              <div className="card-row">
+                <span>Microphone</span>
+                <span className={permState.mic ? 'ok' : 'warn'}>{permState.mic ? 'OK' : 'Not granted'}</span>
+              </div>
+              {permState.error && <p className="error-text">{permState.error}</p>}
+              <button
+                className="btn btn-outline"
+                onClick={testPermissions}
+                disabled={permState.testing}
+                title="Ask browser for camera & microphone access"
+              >
+                {permState.testing ? 'Checking…' : 'Test camera & microphone'}
+              </button>
+            </div>
+
+            {/* Enter button */}
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => { setShowStartModal(false); setCreatedMeeting(null); }}>
+                Close
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={enterAsHost}
+                // If you want to force permission attempt first, uncomment:
+                // disabled={!permState.cam || !permState.mic}
+              >
+                Enter as Host
               </button>
             </div>
           </div>
