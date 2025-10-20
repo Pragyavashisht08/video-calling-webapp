@@ -540,7 +540,24 @@ body {
 @media print {
   .navbar, .btn, .modal-overlay { display: none; }
 }
-
-/* Smooth scroll + offset for sticky navbar */
+/* ============================================
+   Smooth scroll + offset for sticky navbar
+   ============================================ */
 html { scroll-behavior: smooth; }
 .meetings-section { scroll-margin-top: 80px; }
+
+/* ============================================
+   Subtle Scroll Enhancement (fixed version)
+   ============================================ */
+body, html {
+  height: auto;
+  min-height: 100%;
+  overflow-y: auto;
+}
+
+.app {
+  min-height: calc(100vh + 60px); /* just enough to allow a gentle scroll */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
